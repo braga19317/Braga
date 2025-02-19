@@ -3,25 +3,53 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import gdown
 import os
+import hashlib
+import requests
 
 # Função para baixar o arquivo do Google Drive
 def baixar_arquivo_google_drive(url, caminho_local):
     gdown.download(url, caminho_local, quiet=False)
 
+# Função para calcular o hash de um arquivo
+def calcular_hash_arquivo(caminho_arquivo):
+    hash_md5 = hashlib.md5()
+    with open(caminho_arquivo, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+# Função para calcular o hash de uma URL
+def calcular_hash_url(url):
+    response = requests.get(url, stream=True)
+    hash_md5 = hashlib.md5()
+    for chunk in response.iter_content(chunk_size=8192):
+        hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
 # Cache de dados para evitar recarregamentos
 @st.cache_data
-def carregar_dados():
+def carregar_dados(force_reload=False):
     # URLs e caminhos locais
-    uurl_clientes = 'https://drive.google.com/uc?id=1UI8LIqOWs_Fxi7vkzyoGgyfoDoX9aaFD&export=download'
+    url_clientes = 'https://drive.google.com/uc?id=1UI8LIqOWs_Fxi7vkzyoGgyfoDoX9aaFD&export=download'
     caminho_clientes = 'estatistica_clientes.xlsx'
     url_vendas = 'https://drive.google.com/uc?id=13ck0dTs9VxVA7zvkpWZGrOYl283tBAcm&export=download'
     caminho_vendas = 'Vendas_Credito.xlsx'
 
-    # Baixar arquivos se não existirem
-    if not os.path.exists(caminho_clientes):
+    # Verificar se os arquivos locais existem e se precisam ser atualizados
+    if force_reload or not os.path.exists(caminho_clientes) or not os.path.exists(caminho_vendas):
         baixar_arquivo_google_drive(url_clientes, caminho_clientes)
-    if not os.path.exists(caminho_vendas):
         baixar_arquivo_google_drive(url_vendas, caminho_vendas)
+    else:
+        # Verificar se os arquivos no Google Drive foram atualizados
+        hash_clientes_local = calcular_hash_arquivo(caminho_clientes)
+        hash_vendas_local = calcular_hash_arquivo(caminho_vendas)
+        hash_clientes_remoto = calcular_hash_url(url_clientes)
+        hash_vendas_remoto = calcular_hash_url(url_vendas)
+
+        if hash_clientes_local != hash_clientes_remoto:
+            baixar_arquivo_google_drive(url_clientes, caminho_clientes)
+        if hash_vendas_local != hash_vendas_remoto:
+            baixar_arquivo_google_drive(url_vendas, caminho_vendas)
 
     # Carregar dados
     try:
@@ -269,9 +297,12 @@ def main():
     st.title("Análise de Clientes")
     st.sidebar.title("Filtros")
 
-    # Carregar dados com spinner
-    with st.spinner("Carregando dados..."):
+    # Botão para forçar o recarregamento dos dados
+    if st.sidebar.button("Recarregar Dados"):
+        clientes_df, vendas_credito_df = carregar_dados(force_reload=True)
+    else:
         clientes_df, vendas_credito_df = carregar_dados()
+
     if clientes_df is None or vendas_credito_df is None:
         return
 
