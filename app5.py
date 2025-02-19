@@ -10,44 +10,49 @@ import requests
 def baixar_arquivo_google_drive(url, caminho_local):
     gdown.download(url, caminho_local, quiet=False)
 
-# Função para calcular o hash de um arquivo
+# Função para calcular o hash de um arquivo local
 def calcular_hash_arquivo(caminho_arquivo):
+    if not os.path.exists(caminho_arquivo):
+        return None
     hash_md5 = hashlib.md5()
     with open(caminho_arquivo, "rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
 
-# Função para calcular o hash de uma URL
+# Função para calcular o hash de um arquivo remoto (Google Drive)
 def calcular_hash_url(url):
-    response = requests.get(url, stream=True)
-    hash_md5 = hashlib.md5()
-    for chunk in response.iter_content(chunk_size=8192):
-        hash_md5.update(chunk)
-    return hash_md5.hexdigest()
+    try:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+        hash_md5 = hashlib.md5()
+        for chunk in response.iter_content(chunk_size=8192):
+            hash_md5.update(chunk)
+        return hash_md5.hexdigest()
+    except Exception as e:
+        st.error(f"Erro ao calcular o hash do arquivo remoto: {e}")
+        return None
 
-# Cache de dados para evitar recarregamentos
-@st.cache_data
-def carregar_dados(force_reload=False):
+# Função para carregar os dados
+def carregar_dados():
     # URLs e caminhos locais
     url_clientes = 'https://drive.google.com/uc?id=1UI8LIqOWs_Fxi7vkzyoGgyfoDoX9aaFD&export=download'
     caminho_clientes = 'estatistica_clientes.xlsx'
     url_vendas = 'https://drive.google.com/uc?id=13ck0dTs9VxVA7zvkpWZGrOYl283tBAcm&export=download'
     caminho_vendas = 'Vendas_Credito.xlsx'
 
-    # Verificar se os arquivos locais existem e se precisam ser atualizados
-    if force_reload or not os.path.exists(caminho_clientes) or not os.path.exists(caminho_vendas):
-        baixar_arquivo_google_drive(url_clientes, caminho_clientes)
-        baixar_arquivo_google_drive(url_vendas, caminho_vendas)
-    else:
-        # Verificar se os arquivos no Google Drive foram atualizados
-        hash_clientes_local = calcular_hash_arquivo(caminho_clientes)
-        hash_vendas_local = calcular_hash_arquivo(caminho_vendas)
-        hash_clientes_remoto = calcular_hash_url(url_clientes)
-        hash_vendas_remoto = calcular_hash_url(url_vendas)
+    # Verificar se os arquivos foram atualizados no Google Drive
+    hash_clientes_remoto = calcular_hash_url(url_clientes)
+    hash_vendas_remoto = calcular_hash_url(url_vendas)
 
+    # Comparar hashes e baixar se necessário
+    if hash_clientes_remoto is not None:
+        hash_clientes_local = calcular_hash_arquivo(caminho_clientes)
         if hash_clientes_local != hash_clientes_remoto:
             baixar_arquivo_google_drive(url_clientes, caminho_clientes)
+
+    if hash_vendas_remoto is not None:
+        hash_vendas_local = calcular_hash_arquivo(caminho_vendas)
         if hash_vendas_local != hash_vendas_remoto:
             baixar_arquivo_google_drive(url_vendas, caminho_vendas)
 
@@ -98,7 +103,8 @@ def categorizar_cliente_por_faturamento(faturamento):
 # Função para exibir gráfico de régua de faturamento
 def grafico_regua_faturamento(total_geral):
     fig, ax = plt.subplots(figsize=(10, 2))
-    categorias = ['Até 10 mil', 'De 11 mil a 50 mil', 'De 51 mil a 100 mil', 'De 101 mil a 150 mil', 'De 151 mil a 350 mil', 'De 351 mil até 1 milhão', 'Acima de 1 milhão']
+    categorias = ['Até 10 mil', 'De 11 mil a 50 mil', 'De 51 mil a 100 mil', 'De 101 mil a 150 mil', 
+                  'De 151 mil a 350 mil', 'De 351 mil até 1 milhão', 'Acima de 1 milhão']
     posicoes = [10000, 50000, 100000, 150000, 350000, 1000000, 1500000]
     ax.hlines(1, xmin=0, xmax=1500000, color='gray', linewidth=5)
     ax.plot(total_geral, 1, 'ro')  # Marca a posição do cliente
@@ -109,9 +115,13 @@ def grafico_regua_faturamento(total_geral):
     plt.tight_layout()
     st.pyplot(fig)
 
-# Função para exibir métricas principais
+# Função para exibir métricas e análises
 def exibir_metricas(clientes_filtrados, vendas_cliente):
     hoje = pd.Timestamp.today()
+
+    # Converter colunas de data
+    for coluna in ["Vencimento", "Dt.Emissão"]:
+        clientes_filtrados[coluna] = pd.to_datetime(clientes_filtrados[coluna], errors='coerce')
 
     # Filtra valores vencidos e a vencer
     valores_vencidos = clientes_filtrados[clientes_filtrados["Vencimento"] < hoje]
@@ -158,11 +168,8 @@ def exibir_metricas(clientes_filtrados, vendas_cliente):
 
     # Cálculo do prazo médio de recebimento
     if 'Dt.pagto' in vendas_cliente.columns and 'Vencimento1' in vendas_cliente.columns and 'Vl.liquido1' in vendas_cliente.columns:
-        # Converter colunas de data para datetime
         vendas_cliente['Dt.pagto'] = pd.to_datetime(vendas_cliente['Dt.pagto'], errors='coerce')
         vendas_cliente['Vencimento1'] = pd.to_datetime(vendas_cliente['Vencimento1'], errors='coerce')
-
-        # Calcular dias para recebimento
         vendas_cliente['Dias Para Recebimento'] = (vendas_cliente['Dt.pagto'] - vendas_cliente['Vencimento1']).dt.days
         soma_valores_recebidos = vendas_cliente['Vl.liquido1'].sum()
         prazo_medio_recebimento = (vendas_cliente['Dias Para Recebimento'] * vendas_cliente['Vl.liquido1']).sum() / soma_valores_recebidos if soma_valores_recebidos > 0 else 0
@@ -204,11 +211,11 @@ def exibir_metricas(clientes_filtrados, vendas_cliente):
 
     # Comentário sobre o Índice de Rotatividade
     if turnover_ratio > 10:
-        st.write("Comentário: O índice de rotatividade está alto, indicando que a empresa está eficiente em cobrar suas contas a receber.")
+        st.write("Comentário: O índice de rotatividade está alto, indicando eficiência na cobrança.")
     elif turnover_ratio < 5:
-        st.write("Comentário: O índice de rotatividade está baixo, sugerindo possíveis problemas na cobrança ou clientes com dificuldades financeiras.")
+        st.write("Comentário: Índice baixo, sugere problemas na cobrança ou clientes com dificuldades.")
     else:
-        st.write("Comentário: O índice de rotatividade está dentro da média, indicando uma eficiência razoável na cobrança das contas a receber.")
+        st.write("Comentário: Índice dentro da média, eficiência razoável na cobrança.")
 
     # Gráfico de pizza para totais
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -220,7 +227,7 @@ def exibir_metricas(clientes_filtrados, vendas_cliente):
         colors=["#FF6F61", "#6FA2FF"],
         wedgeprops={"linewidth": 1, "edgecolor": "white"}
     )
-    ax.axis("equal")  # Equal aspect ratio ensures that pie is drawn as a circle.
+    ax.axis("equal")
     st.pyplot(fig)
 
     # Análise de Tendências
@@ -236,9 +243,6 @@ def exibir_metricas(clientes_filtrados, vendas_cliente):
     ax.set_ylabel('Valor (R$)')
     ax.legend()
     st.pyplot(fig)
-
-    # Comentário sobre a Análise de Tendências
-    st.write("Comentário: A análise de tendências mostra como os valores vencidos e a vencer variam ao longo do tempo. Um aumento nos valores vencidos pode indicar problemas na cobrança, enquanto um aumento nos valores a vencer pode sugerir um crescimento nas vendas a crédito.")
 
     # Análise de Desempenho
     st.subheader("Análise de Desempenho")
@@ -256,26 +260,10 @@ def exibir_metricas(clientes_filtrados, vendas_cliente):
     st.write(f"**Total Atual:** R$ {desempenho_atual:,.2f}")
     st.write(f"**Variação de Desempenho:** {variacao_desempenho:.2f}%")
 
-    # Comentário sobre a Variação de Desempenho
-    if variacao_desempenho > 0:
-        st.write("Comentário: O desempenho melhorou em relação ao período anterior, indicando um crescimento nas vendas ou recebimentos.")
-    elif variacao_desempenho < 0:
-        st.write("Comentário: O desempenho piorou em relação ao período anterior, sugerindo uma queda nas vendas ou recebimentos.")
-    else:
-        st.write("Comentário: O desempenho permaneceu estável em relação ao período anterior.")
-
     # Análise de Inadimplência
     st.subheader("Análise de Inadimplência")
     inadimplencia = total_vencidos / total_geral * 100 if total_geral > 0 else 0
     st.write(f"**Taxa de Inadimplência:** {inadimplencia:.2f}%")
-
-    # Comentário sobre a Taxa de Inadimplência
-    if inadimplencia > 20:
-        st.write("Comentário: A taxa de inadimplência está alta, indicando que muitos clientes estão atrasados nos pagamentos.")
-    elif inadimplencia < 5:
-        st.write("Comentário: A taxa de inadimplência está baixa, indicando que a maioria dos clientes está pagando em dia.")
-    else:
-        st.write("Comentário: A taxa de inadimplência está dentro de um intervalo aceitável.")
 
     # Análise de Sazonalidade
     st.subheader("Análise de Sazonalidade")
@@ -289,18 +277,13 @@ def exibir_metricas(clientes_filtrados, vendas_cliente):
     ax.set_ylabel('Valor das Vendas (R$)')
     st.pyplot(fig)
 
-    # Comentário sobre a Análise de Sazonalidade
-    st.write("Comentário: A análise de sazonalidade ajuda a identificar padrões de vendas ao longo do ano. Picos em determinados meses podem indicar sazonalidade nas vendas, o que pode ser útil para planejamento de estoque e estratégias de marketing.")
-
 # Função principal
 def main():
     st.title("Análise de Clientes")
     st.sidebar.title("Filtros")
 
-    # Botão para forçar o recarregamento dos dados
-    if st.sidebar.button("Recarregar Dados"):
-        clientes_df, vendas_credito_df = carregar_dados(force_reload=True)
-    else:
+    # Carregar dados
+    with st.spinner("Carregando dados..."):
         clientes_df, vendas_credito_df = carregar_dados()
 
     if clientes_df is None or vendas_credito_df is None:
