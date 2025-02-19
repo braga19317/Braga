@@ -55,10 +55,26 @@ def categorizar_cliente_por_faturamento(faturamento):
         return 'De 51 mil a 100 mil'
     elif faturamento <= 150000:
         return 'De 101 mil a 150 mil'
+    elif faturamento <= 350000:
+        return 'De 151 mil a 350 mil'
     elif faturamento <= 1000000:
         return 'De 151 mil até 1 milhão'
     else:
         return 'Acima de 1 milhão'
+        
+def grafico_regua_faturamento(total_geral):
+    fig, ax = plt.subplots(figsize=(10, 2))
+    categorias = ['Até 10 mil', 'De 11 mil a 50 mil', 'De 51 mil a 100 mil', 'De 101 mil a 150 mil', 'De 151 mil a 350 mil', 'De 351 mil até 1 milhão', 'Acima de 1 milhão']
+    posicoes = [10000, 50000, 100000, 150000, 350000, 1000000, 1500000]  # Adicionei uma posição extra para corresponder ao número de categorias
+    ax.hlines(1, xmin=0, xmax=1500000, color='gray', linewidth=5)  # Ajustei o limite máximo para corresponder à nova posição
+    ax.plot(total_geral, 1, 'ro')  # Marca a posição do cliente
+    ax.set_xlim(0, 1500000)  # Ajustei o limite máximo para corresponder à nova posição
+    ax.set_xticks(posicoes)
+    ax.set_xticklabels(categorias, rotation=45, ha='right')  # Rotaciona os rótulos em 45 graus
+    ax.set_yticks([])
+    plt.tight_layout()  # Ajusta o layout para evitar sobreposição
+    st.pyplot(fig)
+
 
 def main():
     st.title("Análise de Clientes")
@@ -76,6 +92,9 @@ def main():
     if escolha == "Selecione um cliente":
         st.warning("Por favor, selecione um cliente.")
         return
+        
+    # Exibe a identificação do cliente em análise logo abaixo do título
+    st.subheader(f"Cliente em Análise: {escolha}")
 
     # Filtra os dados com base na escolha do usuário
     clientes_filtrados = clientes_df[clientes_df["Cliente_Fantasia"] == escolha].copy()
@@ -114,6 +133,9 @@ def main():
     st.write(f"**Total Geral:** R$ {total_geral:,.2f}")
     st.write(f"**Categoria de Faturamento:** {categoria_faturamento}")
 
+    # Chama a função para exibir o gráfico tipo régua
+    grafico_regua_faturamento(total_geral)
+        
     # Alertas baseados nos totais
     if total_vencidos > total_a_vencer:
         st.error("Atenção: Títulos vencidos são maiores que títulos a vencer!")
