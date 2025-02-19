@@ -12,7 +12,7 @@ def baixar_arquivo_google_drive(url, caminho_local):
 @st.cache_data
 def carregar_dados():
     # URLs e caminhos locais
-    url_clientes = 'https://drive.google.com/uc?id=1UI8LIqOWs_Fxi7vkzyoGgyfoDoX9aaFD&export=download'
+    uurl_clientes = 'https://drive.google.com/uc?id=1UI8LIqOWs_Fxi7vkzyoGgyfoDoX9aaFD&export=download'
     caminho_clientes = 'estatistica_clientes.xlsx'
     url_vendas = 'https://drive.google.com/uc?id=13ck0dTs9VxVA7zvkpWZGrOYl283tBAcm&export=download'
     caminho_vendas = 'Vendas_Credito.xlsx'
@@ -130,6 +130,11 @@ def exibir_metricas(clientes_filtrados, vendas_cliente):
 
     # Cálculo do prazo médio de recebimento
     if 'Dt.pagto' in vendas_cliente.columns and 'Vencimento1' in vendas_cliente.columns and 'Vl.liquido1' in vendas_cliente.columns:
+        # Converter colunas de data para datetime
+        vendas_cliente['Dt.pagto'] = pd.to_datetime(vendas_cliente['Dt.pagto'], errors='coerce')
+        vendas_cliente['Vencimento1'] = pd.to_datetime(vendas_cliente['Vencimento1'], errors='coerce')
+
+        # Calcular dias para recebimento
         vendas_cliente['Dias Para Recebimento'] = (vendas_cliente['Dt.pagto'] - vendas_cliente['Vencimento1']).dt.days
         soma_valores_recebidos = vendas_cliente['Vl.liquido1'].sum()
         prazo_medio_recebimento = (vendas_cliente['Dias Para Recebimento'] * vendas_cliente['Vl.liquido1']).sum() / soma_valores_recebidos if soma_valores_recebidos > 0 else 0
@@ -138,6 +143,7 @@ def exibir_metricas(clientes_filtrados, vendas_cliente):
         st.write("**Informações insuficientes para calcular o prazo médio de recebimento.**")
 
     # Cálculo do faturamento diário médio (ADP)
+    vendas_cliente['Dt.Emissão1'] = pd.to_datetime(vendas_cliente['Dt.Emissão1'], errors='coerce')
     dias_no_periodo = (vendas_cliente["Dt.Emissão1"].max() - vendas_cliente["Dt.Emissão1"].min()).days
     if dias_no_periodo > 0:
         faturamento_diario_medio = vendas_cliente["Vl.liquido1"].sum() / dias_no_periodo
