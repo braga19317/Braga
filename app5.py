@@ -34,8 +34,12 @@ def carregar_dados():
             "Cobrança", "Modelo", "Negociação", "Duplicata", "Razão Social", "CNPJ/CPF", "PDD"
         ]
 
-        # Criar coluna combinada
-        clientes_df["Cliente_Fantasia"] = clientes_df["Cliente"] + " - " + clientes_df["Fantasia"]
+        # Criar coluna combinada (convertendo para string para evitar erro de tipo)
+        clientes_df["Cliente_Fantasia"] = clientes_df["Cliente"].astype(str) + " - " + clientes_df["Fantasia"].astype(str)
+
+        # Converter colunas numéricas para float (caso haja valores não numéricos)
+        clientes_df["Vl.liquido"] = pd.to_numeric(clientes_df["Vl.liquido"], errors="coerce")
+        vendas_df["Vl.liquido"] = pd.to_numeric(vendas_df["Vl.liquido"], errors="coerce")
 
         return clientes_df, vendas_df
 
