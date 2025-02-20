@@ -9,7 +9,7 @@ def baixar_arquivo_google_drive(url, caminho_local):
     gdown.download(url, caminho_local, quiet=False)
 
 # Cache de dados para evitar recarregamentos desnecessários
-@st.cache_data
+# @st.cache_data
 def carregar_dados():
     # URLs e caminhos locais
     url_clientes = 'https://drive.google.com/uc?id=1UI8LIqOWs_Fxi7vkzyoGgyfoDoX9aaFD&export=download'
