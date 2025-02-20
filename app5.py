@@ -287,10 +287,6 @@ def main():
     st.title("Análise de Clientes")
     st.sidebar.title("Filtros")
 
-    # Botão para forçar atualização
-    if st.sidebar.button("Atualizar Dados Agora"):
-        st.experimental_rerun()
-
     # Carregar dados
     with st.spinner("Baixando dados atualizados..."):
         clientes_df, vendas_df = carregar_dados()
