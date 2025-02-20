@@ -4,51 +4,44 @@ import matplotlib.pyplot as plt
 import gdown
 import os
 
-# Função para baixar o arquivo do Google Drive
-def baixar_arquivo_google_drive(url, caminho_local):
-    gdown.download(url, caminho_local, quiet=False)
+# URLs dos arquivos no Google Drive (substitua pelos seus links)
+URL_CLIENTES = "https://drive.google.com/uc?id=1UI8LIqOWs_Fxi7vkzyoGgyfoDoX9aaFD"
+URL_VENDAS = "https://drive.google.com/uc?id=13ck0dTs9VxVA7zvkpWZGrOYl283tBAcm"
 
-# Cache de dados para evitar recarregamentos desnecessários
-@st.cache_data
+# Função para baixar e carregar dados
 def carregar_dados():
-    # URLs e caminhos locais
-    url_clientes = 'https://drive.google.com/uc?id=1UI8LIqOWs_Fxi7vkzyoGgyfoDoX9aaFD&export=download'
-    caminho_clientes = 'estatistica_clientes.xlsx'
-    url_vendas = 'https://drive.google.com/uc?id=13ck0dTs9VxVA7zvkpWZGrOYl283tBAcm&export=download'
-    caminho_vendas = 'Vendas_Credito.xlsx'
-
-    # Baixar arquivos se não existirem
-    if not os.path.exists(caminho_clientes):
-        baixar_arquivo_google_drive(url_clientes, caminho_clientes)
-    if not os.path.exists(caminho_vendas):
-        baixar_arquivo_google_drive(url_vendas, caminho_vendas)
-
-    # Carregar dados
+    """Baixa os arquivos do Google Drive e carrega em DataFrames."""
     try:
-        clientes_df = pd.read_excel(caminho_clientes, engine='openpyxl')
-        vendas_credito_df = pd.read_excel(caminho_vendas, engine='openpyxl')
+        # Baixar arquivos (sobrescreve se existirem)
+        gdown.download(URL_CLIENTES, "clientes.xlsx", quiet=False)
+        gdown.download(URL_VENDAS, "vendas.xlsx", quiet=False)
+
+        # Carregar dados
+        clientes_df = pd.read_excel("clientes.xlsx", engine="openpyxl")
+        vendas_df = pd.read_excel("vendas.xlsx", engine="openpyxl")
+
+        # Renomear colunas (ajuste conforme seus dados)
+        clientes_df.columns = [
+            "Inativo", "Nro.", "Empresa", "Cliente", "Fantasia", "Referência", "Vencimento",
+            "Vl.liquido", "TD", "Nr.docto", "Dt.pagto", "Vl.pagamento", "TP", "Nr.pagamento",
+            "Conta", "Dt.Emissão", "Cobrança", "Modelo", "Negociação", "Duplicata", "Razão Social",
+            "CNPJ/CPF", "PDD"
+        ]
+        
+        vendas_df.columns = [
+            "Inativo", "Nro.", "Empresa", "Cliente", "Fantasia", "Referência", "Vencimento", "Vl.liquido",
+            "TD", "Nr.docto", "Dt.pagto", "Vl.pagto", "TP", "Nr.pagto", "Conta", "Dt.Emissão",
+            "Cobrança", "Modelo", "Negociação", "Duplicata", "Razão Social", "CNPJ/CPF", "PDD"
+        ]
+
+        # Criar coluna combinada
+        clientes_df["Cliente_Fantasia"] = clientes_df["Cliente"] + " - " + clientes_df["Fantasia"]
+
+        return clientes_df, vendas_df
+
     except Exception as e:
-        st.error(f"Erro ao carregar os arquivos: {e}")
+        st.error(f"ERRO: {str(e)}")
         return None, None
-
-    # Corrigir nomes das colunas
-    clientes_df.columns = [
-        "Inativo", "Nro.", "Empresa", "Cliente ", "Fantasia", "Referência", "Vencimento",
-        "Vl.liquido", "TD", "Nr.docto", "Dt.pagto", "Vl.pagamento", "TP", "Nr.pagamento",
-        "Conta", "Dt.Emissão", "Cobrança", "Modelo", "Negociação", "Duplicata", "Razão Social",
-        "CNPJ/CPF", "PDD"
-    ]
-
-    vendas_credito_df.columns = [
-        "Inativo", "Nro.", "Empresa", "Cliente1", "Fantasia1", "Referência", "Vencimento1", "Vl.liquido1",
-        "TD", "Nr.docto", "Dt.pagto", "Vl.pagto", "TP", "Nr.pagto", "Conta", "Dt.Emissão1",
-        "Cobrança", "Modelo", "Negociação", "Duplicata", "Razão Social", "CNPJ/CPF", "PDD"
-    ]
-
-    # Criar coluna combinada "Cliente_Fantasia"
-    clientes_df["Cliente_Fantasia"] = clientes_df.apply(lambda row: f"{row['Cliente ']} - {row['Fantasia']}", axis=1)
-
-    return clientes_df, vendas_credito_df
 
 # Função para categorizar cliente por faturamento
 def categorizar_cliente_por_faturamento(faturamento):
@@ -86,11 +79,15 @@ def main():
     st.title("Análise de Clientes")
     st.sidebar.title("Filtros")
 
-    # Carregar os dados
-    with st.spinner("Carregando dados..."):
-        clientes_df, vendas_credito_df = carregar_dados()
+    # Botão para forçar atualização
+    if st.sidebar.button("Atualizar Dados Agora"):
+        st.experimental_rerun()
 
-    if clientes_df is None or vendas_credito_df is None:
+    # Carregar dados
+    with st.spinner("Baixando dados atualizados..."):
+        clientes_df, vendas_df = carregar_dados()
+
+    if clientes_df is None or vendas_df is None:
         return
 
     # Selecionar cliente
@@ -105,8 +102,8 @@ def main():
 
     # Filtrar dados
     clientes_filtrados = clientes_df[clientes_df["Cliente_Fantasia"] == escolha].copy()
-    cliente_nome = clientes_filtrados["Cliente "].iloc[0]
-    vendas_cliente = vendas_credito_df[vendas_credito_df["Cliente1"] == cliente_nome].copy()
+    cliente_nome = clientes_filtrados["Cliente"].iloc[0]
+    vendas_cliente = vendas_df[vendas_df["Cliente"] == cliente_nome].copy()
 
     # Converter colunas de data
     for coluna in ["Vencimento", "Dt.Emissão"]:
@@ -157,21 +154,21 @@ def main():
     st.write(f"**Prazo Médio de Faturamento (ponderado):** {prazo_medio_ponderado:.2f} dias")
 
     # Cálculo do prazo médio de recebimento
-    if 'Dt.pagto' in vendas_cliente.columns and 'Vencimento1' in vendas_cliente.columns and 'Vl.liquido1' in vendas_cliente.columns:
+    if 'Dt.pagto' in vendas_cliente.columns and 'Vencimento' in vendas_cliente.columns and 'Vl.liquido' in vendas_cliente.columns:
         vendas_cliente['Dt.pagto'] = pd.to_datetime(vendas_cliente['Dt.pagto'], errors='coerce')
-        vendas_cliente['Vencimento1'] = pd.to_datetime(vendas_cliente['Vencimento1'], errors='coerce')
-        vendas_cliente['Dias Para Recebimento'] = (vendas_cliente['Dt.pagto'] - vendas_cliente['Vencimento1']).dt.days
-        soma_valores_recebidos = vendas_cliente['Vl.liquido1'].sum()
-        prazo_medio_recebimento = (vendas_cliente['Dias Para Recebimento'] * vendas_cliente['Vl.liquido1']).sum() / soma_valores_recebidos if soma_valores_recebidos > 0 else 0
+        vendas_cliente['Vencimento'] = pd.to_datetime(vendas_cliente['Vencimento'], errors='coerce')
+        vendas_cliente['Dias Para Recebimento'] = (vendas_cliente['Dt.pagto'] - vendas_cliente['Vencimento']).dt.days
+        soma_valores_recebidos = vendas_cliente['Vl.liquido'].sum()
+        prazo_medio_recebimento = (vendas_cliente['Dias Para Recebimento'] * vendas_cliente['Vl.liquido']).sum() / soma_valores_recebidos if soma_valores_recebidos > 0 else 0
         st.write(f"**Prazo Médio de Recebimento (ponderado):** {prazo_medio_recebimento:.2f} dias")
     else:
         st.write("**Informações insuficientes para calcular o prazo médio de recebimento.**")
 
     # Cálculo do faturamento diário médio (ADP)
-    vendas_cliente['Dt.Emissão1'] = pd.to_datetime(vendas_cliente['Dt.Emissão1'], errors='coerce')
-    dias_no_periodo = (vendas_cliente["Dt.Emissão1"].max() - vendas_cliente["Dt.Emissão1"].min()).days
+    vendas_cliente['Dt.Emissão'] = pd.to_datetime(vendas_cliente['Dt.Emissão'], errors='coerce')
+    dias_no_periodo = (vendas_cliente["Dt.Emissão"].max() - vendas_cliente["Dt.Emissão"].min()).days
     if dias_no_periodo > 0:
-        faturamento_diario_medio = vendas_cliente["Vl.liquido1"].sum() / dias_no_periodo
+        faturamento_diario_medio = vendas_cliente["Vl.liquido"].sum() / dias_no_periodo
     else:
         faturamento_diario_medio = 0
 
@@ -185,7 +182,7 @@ def main():
     st.write(f"**DSO (Days Sales Outstanding) para o cliente selecionado:** {DSO:.2f} dias")
 
     # Cálculo do CEI (Collection Effectiveness Index)
-    total_vendas_credito = vendas_cliente["Vl.liquido1"].sum()
+    total_vendas_credito = vendas_cliente["Vl.liquido"].sum()
     total_pagamentos_recebidos = vendas_cliente["Vl.pagto"].sum()
     if total_vendas_credito > 0:
         CEI = (total_pagamentos_recebidos / total_vendas_credito) * 100
@@ -240,9 +237,9 @@ def main():
     # Análise de Desempenho
     st.subheader("Análise de Desempenho")
     desempenho_anterior = clientes_filtrados["Vl.liquido"].sum()
-    desempenho_atual = vendas_cliente["Vl.liquido1"].sum()
+    desempenho_atual = vendas_cliente["Vl.liquido"].sum()
     periodo_anterior = f"{clientes_filtrados['Dt.Emissão'].min().date()} a {clientes_filtrados['Dt.Emissão'].max().date()}"
-    periodo_atual = f"{vendas_cliente['Dt.Emissão1'].min().date()} a {vendas_cliente['Dt.Emissão1'].max().date()}"
+    periodo_atual = f"{vendas_cliente['Dt.Emissão'].min().date()} a {vendas_cliente['Dt.Emissão'].max().date()}"
     if desempenho_anterior > 0:
         variacao_desempenho = ((desempenho_atual - desempenho_anterior) / desempenho_anterior) * 100
     else:
@@ -276,8 +273,8 @@ def main():
 
     # Análise de Sazonalidade
     st.subheader("Análise de Sazonalidade")
-    vendas_cliente['Mês'] = vendas_cliente['Dt.Emissão1'].dt.month
-    sazonalidade = vendas_cliente.groupby('Mês')['Vl.liquido1'].sum()
+    vendas_cliente['Mês'] = vendas_cliente['Dt.Emissão'].dt.month
+    sazonalidade = vendas_cliente.groupby('Mês')['Vl.liquido'].sum()
 
     fig, ax = plt.subplots(figsize=(10, 6))
     sazonalidade.plot(kind='bar', ax=ax)
@@ -294,11 +291,15 @@ def main():
     st.title("Análise de Clientes")
     st.sidebar.title("Filtros")
 
-    # Carregar dados
-    with st.spinner("Carregando dados..."):
-        clientes_df, vendas_credito_df = carregar_dados()
+    # Botão para forçar atualização
+    if st.sidebar.button("Atualizar Dados Agora"):
+        st.experimental_rerun()
 
-    if clientes_df is None or vendas_credito_df is None:
+    # Carregar dados
+    with st.spinner("Baixando dados atualizados..."):
+        clientes_df, vendas_df = carregar_dados()
+
+    if clientes_df is None or vendas_df is None:
         return
 
     # Selecionar cliente
@@ -313,8 +314,8 @@ def main():
 
     # Filtrar dados
     clientes_filtrados = clientes_df[clientes_df["Cliente_Fantasia"] == escolha].copy()
-    cliente_nome = clientes_filtrados["Cliente "].iloc[0]
-    vendas_cliente = vendas_credito_df[vendas_credito_df["Cliente1"] == cliente_nome].copy()
+    cliente_nome = clientes_filtrados["Cliente"].iloc[0]
+    vendas_cliente = vendas_df[vendas_df["Cliente"] == cliente_nome].copy()
 
     # Exibir métricas e análises
     exibir_metricas(clientes_filtrados, vendas_cliente)
