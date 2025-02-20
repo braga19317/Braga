@@ -78,39 +78,11 @@ def grafico_regua_faturamento(total_geral):
     plt.tight_layout()
     st.pyplot(fig)
 
-# Função principal
-def main():
-    st.title("Análise de Clientes")
-    st.sidebar.title("Filtros")
-
-    # Carregar dados
-    with st.spinner("Baixando dados atualizados..."):
-        clientes_df, vendas_df = carregar_dados()
-
-    if clientes_df is None or vendas_df is None:
-        return
-
-    # Selecionar cliente
-    opcoes = clientes_df["Cliente_Fantasia"].unique().tolist()
-    escolha = st.sidebar.selectbox("Escolha um Cliente_Fantasia:", ["Selecione um cliente"] + opcoes)
-
-    if escolha == "Selecione um cliente":
-        st.warning("Por favor, selecione um cliente.")
-        return
-
-    st.subheader(f"Cliente em Análise: {escolha}")
-
-    # Filtrar dados
-    clientes_filtrados = clientes_df[clientes_df["Cliente_Fantasia"] == escolha].copy()
-    cliente_nome = clientes_filtrados["Cliente"].iloc[0]
-    vendas_cliente = vendas_df[vendas_df["Cliente"] == cliente_nome].copy()
-
-    # Converter colunas de data
-    for coluna in ["Vencimento", "Dt.Emissão"]:
-        clientes_filtrados[coluna] = pd.to_datetime(clientes_filtrados[coluna], errors='coerce')
+# Função para exibir métricas e gráficos
+def exibir_metricas(clientes_filtrados, vendas_cliente):
+    hoje = pd.Timestamp.today()
 
     # Filtra valores vencidos e a vencer
-    hoje = pd.Timestamp.today()
     valores_vencidos = clientes_filtrados[clientes_filtrados["Vencimento"] < hoje]
     valores_a_vencer = clientes_filtrados[clientes_filtrados["Vencimento"] >= hoje]
 
@@ -270,6 +242,7 @@ def main():
         st.write("Comentário: A taxa de inadimplência está baixa, indicando que a maioria dos clientes está pagando em dia.")
     else:
         st.write("Comentário: A taxa de inadimplência está dentro de um intervalo aceitável.")
+
 
     # Análise de Sazonalidade
     st.subheader("Análise de Sazonalidade")
